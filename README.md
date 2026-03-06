@@ -76,8 +76,8 @@ Choice [a/e/i/c] (default: a):
 
 | Choice | What happens |
 |---|---|
-| `a` (default, Enter) | Improved prompt copied to clipboard — paste to resubmit |
-| `e` | Opens `$EDITOR` (falls back to `nano`) — edit, save, paste to resubmit |
+| `a` (default, Enter) | Improved prompt **replaces the original and executes immediately** via `modifiedPrompt` — no resubmit needed |
+| `e` | Opens `$EDITOR` (falls back to `nano`) — edit and save, then **execution is interrupted** so you can review your edit before resubmitting manually |
 | `i` | Original prompt passes through to Claude unchanged |
 | `c` | Prompt is discarded |
 

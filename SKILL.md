@@ -78,8 +78,8 @@ Choice [a/e/i/c] (default: a):
 
 | Choice | Result |
 |---|---|
-| `a` (default) | Improved prompt copied to clipboard — paste to resubmit |
-| `e` | Opens `$EDITOR` (or `nano`) with suggestion — edit, save, paste to resubmit |
+| `a` (default) | Improved prompt **replaces the original and executes immediately** — no resubmit needed |
+| `e` | Opens `$EDITOR` with suggestion — edit, save, then **execution is interrupted** so you can review before resubmitting manually |
 | `i` | Original prompt passes through unchanged |
 | `c` | Prompt is discarded |
 

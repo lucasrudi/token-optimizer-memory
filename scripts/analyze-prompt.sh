@@ -211,8 +211,8 @@ except Exception:
     printf '\n\033[36mSuggested improvement:\033[0m\n'
     printf '  %s\n' "$IMPROVED"
     printf '\n\033[90m%s\033[0m\n' "────────────────────────────────────────────────────────"
-    printf '  \033[1m[a]\033[0m Accept  — copy suggestion to clipboard, resubmit it\n'
-    printf '  \033[1m[e]\033[0m Edit    — open suggestion in $EDITOR, then resubmit\n'
+    printf '  \033[1m[a]\033[0m Accept  — apply suggestion and continue immediately\n'
+    printf '  \033[1m[e]\033[0m Edit    — open suggestion in $EDITOR, then interrupt for review\n'
     printf '  \033[1m[i]\033[0m Ignore  — proceed with original prompt unchanged\n'
     printf '  \033[1m[c]\033[0m Cancel  — discard the prompt\n'
     printf '\nChoice [a/e/i/c] (default: a): '
@@ -225,21 +225,13 @@ if { true </dev/tty; } 2>/dev/null; then
 fi
 CHOICE=$(printf '%s' "${CHOICE:-a}" | tr '[:upper:]' '[:lower:]' | tr -d '[:space:]')
 
-# ── Helper: copy to clipboard ─────────────────────────────────────────────────
-copy_to_clipboard() {
-    local text="$1"
-    if command -v pbcopy &>/dev/null; then
-        printf '%s' "$text" | pbcopy && printf '  Copied to clipboard.\n' >&2
-    elif command -v xclip &>/dev/null; then
-        printf '%s' "$text" | xclip -selection clipboard && printf '  Copied to clipboard.\n' >&2
-    elif command -v xsel &>/dev/null; then
-        printf '%s' "$text" | xsel --clipboard --input && printf '  Copied to clipboard.\n' >&2
-    else
-        printf '  (No clipboard tool found — copy the prompt above manually.)\n' >&2
-    fi
+# ── Helper: emit modifiedPrompt JSON — Claude executes the new prompt directly
+emit_replace() {
+    export MODIFIED_PROMPT="$1"
+    python3 -c "import json, os; print(json.dumps({'modifiedPrompt': os.environ['MODIFIED_PROMPT']}))"
 }
 
-# ── Helper: emit block JSON safely via env var ────────────────────────────────
+# ── Helper: emit block JSON — interrupts execution, user must resubmit manually
 emit_block() {
     export BLOCK_REASON="$1"
     python3 -c "import json, os; print(json.dumps({'decision': 'block', 'reason': os.environ['BLOCK_REASON']}))"
@@ -248,25 +240,27 @@ emit_block() {
 # ── Handle choice ─────────────────────────────────────────────────────────────
 case "$CHOICE" in
     a|"")
-        copy_to_clipboard "$IMPROVED"
-        printf '\033[32mPaste the improved prompt to resubmit.\033[0m\n\n' >&2
-        emit_block "Improved prompt ready — paste to resubmit:"$'\n\n'"$IMPROVED"
+        # Accept: replace prompt with improved version, Claude executes it directly
+        printf '\033[32m[token-optimizer] Applying suggestion and continuing.\033[0m\n\n' >&2
+        emit_replace "$IMPROVED"
         ;;
     e)
+        # Edit: open editor with suggestion, then interrupt so user can review before resubmit
         TMPFILE=$(mktemp /tmp/token-optimizer-XXXXXX.txt)
         printf '%s' "$IMPROVED" > "$TMPFILE"
         "${EDITOR:-nano}" "$TMPFILE" </dev/tty >/dev/tty
         EDITED=$(cat "$TMPFILE")
         rm -f "$TMPFILE"
-        copy_to_clipboard "$EDITED"
-        printf '\033[32mEdited prompt copied to clipboard. Paste to resubmit.\033[0m\n\n' >&2
-        emit_block "Edited prompt ready — paste to resubmit:"$'\n\n'"$EDITED"
+        printf '\033[33m[token-optimizer] Execution interrupted — resubmit when ready.\033[0m\n\n' >&2
+        emit_block "Your edited prompt (copy and resubmit to proceed):"$'\n\n'"$EDITED"
         ;;
     i)
+        # Ignore: pass original through unchanged
         printf '\033[90m[token-optimizer] Proceeding with original prompt.\033[0m\n\n' >&2
         exit 0
         ;;
     c|*)
+        # Cancel: discard the prompt
         printf '\033[31mPrompt cancelled.\033[0m\n\n' >&2
         emit_block "Prompt cancelled."
         ;;
