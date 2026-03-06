@@ -14,8 +14,11 @@ Monitors every user prompt for token efficiency issues and continuously learns f
 UserPromptSubmit hook → analyze-prompt.sh  (rule-based, instant, zero cost)
         ↓
         0 issues  → silent pass-through
-        1 issue   → yellow warning to stderr, prompt proceeds
-        2+ issues → BLOCK: shows suggested rewrite, waits for user to act
+        1+ issues → interactive menu (reads from /dev/tty):
+                    [a] Accept  — copy suggestion to clipboard, block for resubmit
+                    [e] Edit    — open in $EDITOR, copy result, block for resubmit
+                    [i] Ignore  — pass original through unchanged
+                    [c] Cancel  — discard the prompt
 
 Stop hook → learn-from-session.sh  (AI-powered, runs after session ends)
         ↓ updates memory/patterns.md with new patterns
@@ -50,26 +53,39 @@ On every prompt (skips prompts under 25 characters):
 | Issues found | Behavior |
 |---|---|
 | 0 | Silent — prompt proceeds immediately |
-| 1 | Yellow warning to stderr — prompt still proceeds |
-| 2+ | **Blocked** — shows detected issues + suggested rewrite. User must act. |
+| 1+ | Interactive menu shown, user chooses how to proceed |
 
-When blocked, the output looks like:
+### Interactive menu
+
+When 1 or more issues are found, the hook displays a menu and waits for input:
+
 ```
-Issues detected (2):
-  • No file reference — Claude will guess where to make changes
-  • No verification criteria — Claude can't self-check the result
+[token-optimizer] Found 2 issue(s):
+  1. No file reference — Claude will guess where to make changes
+  2. No verification criteria — Claude can't self-check the result
 
 Suggested improvement:
-  fix the login bug in @<file-path> [paste exact error + file:line]. Run tests after to verify.
+  fix the login bug in @<file-path>. Run tests after to verify.
 
-───────────────────────────────────────────────────
-Resubmit the improved prompt above, or prefix your
-original with  skip:  to proceed without changes.
+────────────────────────────────────────────────────────
+  [a] Accept  — copy suggestion to clipboard, resubmit it
+  [e] Edit    — open suggestion in $EDITOR, then resubmit
+  [i] Ignore  — proceed with original prompt unchanged
+  [c] Cancel  — discard the prompt
+
+Choice [a/e/i/c] (default: a):
 ```
+
+| Choice | Result |
+|---|---|
+| `a` (default) | Improved prompt copied to clipboard — paste to resubmit |
+| `e` | Opens `$EDITOR` (or `nano`) with suggestion — edit, save, paste to resubmit |
+| `i` | Original prompt passes through unchanged |
+| `c` | Prompt is discarded |
 
 ### Bypass
 
-Prefix any prompt with `skip:` to skip all checks:
+Prefix any prompt with `skip:` to skip all checks with no menu:
 ```
 skip: fix the bug
 ```
