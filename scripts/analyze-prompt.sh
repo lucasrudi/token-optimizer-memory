@@ -4,8 +4,8 @@
 # Behavior:
 #   0 issues → silent pass-through
 #   1+ issues → interactive menu (reads from /dev/tty):
-#     [a] Accept  — copy suggested rewrite to clipboard, block for resubmit
-#     [e] Edit    — open suggestion in $EDITOR, copy result, block for resubmit
+#     [a] Accept  — apply suggestion and continue immediately
+#     [e] Edit    — open suggestion in $EDITOR, interrupt for review before resubmit
 #     [i] Ignore  — pass original prompt through unchanged
 #     [c] Cancel  — discard the prompt entirely
 #
