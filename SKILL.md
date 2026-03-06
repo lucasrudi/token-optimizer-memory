@@ -1,7 +1,7 @@
 ---
 name: token-optimizer-memory
-description: This skill should be used when the user asks to "optimize my prompts", "reduce token usage", "improve prompt efficiency", "teach me to write better prompts", "monitor prompt quality", "install token optimizer", "set up prompt coaching", or wants ongoing feedback on how to write more efficient Claude Code prompts. Installs two hooks: a real-time rule-based analyzer on prompt submit, and an AI-powered learning hook on session end that grows a memory of patterns from the user's own sessions.
-version: 0.1.0
+description: This skill should be used when the user asks to "optimize my prompts", "reduce token usage", "improve prompt efficiency", "teach me to write better prompts", "monitor prompt quality", "install token optimizer", "set up prompt coaching", or wants ongoing feedback on how to write more efficient Claude Code prompts. Installs two hooks: a real-time rule-based analyzer on prompt submit that blocks low-quality prompts with a suggested rewrite, and an AI-powered learning hook on session end that grows a memory of patterns from the user's own sessions.
+version: 0.2.0
 ---
 
 # Token Optimizer Memory
@@ -12,7 +12,10 @@ Monitors every user prompt for token efficiency issues and continuously learns f
 
 ```
 UserPromptSubmit hook → analyze-prompt.sh  (rule-based, instant, zero cost)
-        ↓ stderr tips shown before Claude responds
+        ↓
+        0 issues  → silent pass-through
+        1 issue   → yellow warning to stderr, prompt proceeds
+        2+ issues → BLOCK: shows suggested rewrite, waits for user to act
 
 Stop hook → learn-from-session.sh  (AI-powered, runs after session ends)
         ↓ updates memory/patterns.md with new patterns
@@ -42,11 +45,33 @@ On every prompt (skips prompts under 25 characters):
 6. **Architectural task without plan mode** — refactor/migrate/redesign without "plan mode" mention
 7. **Learned patterns** — cross-checks against `memory/patterns.md` patterns from past sessions
 
-Tips appear in yellow before Claude processes the prompt:
+### Response tiers
+
+| Issues found | Behavior |
+|---|---|
+| 0 | Silent — prompt proceeds immediately |
+| 1 | Yellow warning to stderr — prompt still proceeds |
+| 2+ | **Blocked** — shows detected issues + suggested rewrite. User must act. |
+
+When blocked, the output looks like:
 ```
-[token-optimizer] Prompt efficiency tips:
-  • No file reference → use @ to point to files (e.g. '@src/auth.ts')
-  • No verification → append: 'run tests after' or describe expected output
+Issues detected (2):
+  • No file reference — Claude will guess where to make changes
+  • No verification criteria — Claude can't self-check the result
+
+Suggested improvement:
+  fix the login bug in @<file-path> [paste exact error + file:line]. Run tests after to verify.
+
+───────────────────────────────────────────────────
+Resubmit the improved prompt above, or prefix your
+original with  skip:  to proceed without changes.
+```
+
+### Bypass
+
+Prefix any prompt with `skip:` to skip all checks:
+```
+skip: fix the bug
 ```
 
 ## What the Learning Hook Does
