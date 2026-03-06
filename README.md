@@ -12,9 +12,11 @@ You submit a prompt
 UserPromptSubmit hook → analyze-prompt.sh (instant, zero cost)
     ↓
     0 issues  → silent pass-through
-    1 issue   → yellow warning to stderr, prompt still proceeds
-    2+ issues → BLOCKED: shows issues + suggested rewrite
-                User edits and resubmits, or prefixes with "skip:"
+    1+ issues → interactive menu shown (reads from /dev/tty):
+                [a] Accept  — apply suggestion and continue immediately
+                [e] Edit    — open $EDITOR, interrupt for review before resubmit
+                [i] Ignore  — pass original prompt through
+                [c] Cancel  — discard the prompt
 
 Claude finishes the session
     ↓
@@ -49,25 +51,42 @@ The real-time analyzer catches 6 categories of token waste on every prompt (skip
 | Issues found | Behavior |
 |---|---|
 | 0 | Silent — prompt proceeds immediately |
-| 1 | Yellow warning to stderr — prompt still proceeds |
-| **2+** | **Blocked** — shows issues + suggested rewrite |
+| 1+ | Interactive menu — user chooses what to do |
 
-### What a block looks like
+### Interactive menu
+
+When any issue is found, the hook pauses and shows a menu:
 
 ```
-Issues detected (2):
-  • No file reference — Claude will guess where to make changes
-  • No verification criteria — Claude can't self-check the result
+[token-optimizer] Found 2 issue(s):
+  1. No file reference — Claude will guess where to make changes
+  2. No verification criteria — Claude can't self-check the result
 
 Suggested improvement:
-  fix the login bug in @<file-path> [paste exact error + file:line]. Run tests after to verify.
+  fix the login bug in @<file-path>. Run tests after to verify.
 
-───────────────────────────────────────────────────
-Resubmit the improved prompt above, or prefix your
-original with  skip:  to proceed without changes.
+────────────────────────────────────────────────────────
+  [a] Accept  — apply suggestion and continue immediately
+  [e] Edit    — open suggestion in $EDITOR, then resubmit
+  [i] Ignore  — proceed with original prompt unchanged
+  [c] Cancel  — discard the prompt
+
+Choice [a/e/i/c] (default: a):
 ```
 
-You then either resubmit the improved version, or type `skip: fix the login bug` to proceed as-is.
+| Choice | What happens |
+|---|---|
+| `a` (default, Enter) | Improved prompt **replaces the original and executes immediately** via `modifiedPrompt` — no resubmit needed |
+| `e` | Opens `$EDITOR` (falls back to `nano`) — edit and save, then **execution is interrupted** so you can review your edit before resubmitting manually |
+| `i` | Original prompt passes through to Claude unchanged |
+| `c` | Prompt is discarded |
+
+### Bypass
+
+Prefix any prompt with `skip:` to skip all checks with no menu:
+```
+skip: fix the bug
+```
 
 ---
 
