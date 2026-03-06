@@ -9,9 +9,12 @@ Two hooks run automatically in every Claude Code session:
 ```
 You submit a prompt
     ↓
-UserPromptSubmit hook → analyze-prompt.sh
-    ↓ instant rule-based checks (zero cost, zero latency)
-    ↓ yellow tips printed before Claude responds
+UserPromptSubmit hook → analyze-prompt.sh (instant, zero cost)
+    ↓
+    0 issues  → silent pass-through
+    1 issue   → yellow warning to stderr, prompt still proceeds
+    2+ issues → BLOCKED: shows issues + suggested rewrite
+                User edits and resubmits, or prefixes with "skip:"
 
 Claude finishes the session
     ↓
@@ -32,7 +35,7 @@ The feedback loop compounds: the more you use Claude Code, the more tailored the
 
 The real-time analyzer catches 6 categories of token waste on every prompt (skips prompts under 25 characters):
 
-| Check | Anti-pattern | Tip |
+| Check | Anti-pattern | Fix |
 |---|---|---|
 | Vague task | "fix the bug" / "make it work" | Specify file path + error + what done looks like |
 | Missing error details | Bug intent with no error message or file:line | Paste exact error + reproduce steps |
@@ -41,13 +44,30 @@ The real-time analyzer catches 6 categories of token waste on every prompt (skip
 | Compound task | Multiple concerns in one prompt | Split into sequential focused prompts |
 | Architectural task | Refactor/migrate without plan mode | Prefix with "enter plan mode — " |
 
-Tips appear in yellow before Claude processes your prompt:
+### Response tiers
+
+| Issues found | Behavior |
+|---|---|
+| 0 | Silent — prompt proceeds immediately |
+| 1 | Yellow warning to stderr — prompt still proceeds |
+| **2+** | **Blocked** — shows issues + suggested rewrite |
+
+### What a block looks like
 
 ```
-[token-optimizer] Prompt efficiency tips:
-  • No file reference → use @ to point to files (e.g. '@src/auth.ts')
-  • No verification → append: 'run tests after' or describe expected output
+Issues detected (2):
+  • No file reference — Claude will guess where to make changes
+  • No verification criteria — Claude can't self-check the result
+
+Suggested improvement:
+  fix the login bug in @<file-path> [paste exact error + file:line]. Run tests after to verify.
+
+───────────────────────────────────────────────────
+Resubmit the improved prompt above, or prefix your
+original with  skip:  to proceed without changes.
 ```
+
+You then either resubmit the improved version, or type `skip: fix the login bug` to proceed as-is.
 
 ---
 
