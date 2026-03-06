@@ -13,8 +13,8 @@ UserPromptSubmit hook → analyze-prompt.sh (instant, zero cost)
     ↓
     0 issues  → silent pass-through
     1+ issues → interactive menu shown (reads from /dev/tty):
-                [a] Accept  — copy suggestion to clipboard, resubmit
-                [e] Edit    — open $EDITOR with suggestion, copy result
+                [a] Accept  — apply suggestion and continue immediately
+                [e] Edit    — open $EDITOR, interrupt for review before resubmit
                 [i] Ignore  — pass original prompt through
                 [c] Cancel  — discard the prompt
 
@@ -66,7 +66,7 @@ Suggested improvement:
   fix the login bug in @<file-path>. Run tests after to verify.
 
 ────────────────────────────────────────────────────────
-  [a] Accept  — copy suggestion to clipboard, resubmit it
+  [a] Accept  — apply suggestion and continue immediately
   [e] Edit    — open suggestion in $EDITOR, then resubmit
   [i] Ignore  — proceed with original prompt unchanged
   [c] Cancel  — discard the prompt

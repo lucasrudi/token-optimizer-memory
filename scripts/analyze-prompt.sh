@@ -225,44 +225,73 @@ if { true </dev/tty; } 2>/dev/null; then
 fi
 CHOICE=$(printf '%s' "${CHOICE:-a}" | tr '[:upper:]' '[:lower:]' | tr -d '[:space:]')
 
-# ── Helper: emit modifiedPrompt JSON — Claude executes the new prompt directly
+# ── Helpers: file-based JSON emission (no stdout size limits, no injection risk)
+#
+# Content is written to temp files on the filesystem; Python reads them and
+# serializes to JSON. This handles arbitrarily large prompts and multi-file
+# edits without any string-passing constraints.
+
+# emit_replace FILE — outputs {"modifiedPrompt": <file contents>}
+# Claude Code replaces the user's prompt with the file contents and executes.
 emit_replace() {
-    export MODIFIED_PROMPT="$1"
-    python3 -c "import json, os; print(json.dumps({'modifiedPrompt': os.environ['MODIFIED_PROMPT']}))"
+    local file="$1"
+    python3 - "$file" << 'PYEOF'
+import sys, json
+with open(sys.argv[1]) as f:
+    content = f.read().rstrip('\n')
+print(json.dumps({'modifiedPrompt': content}))
+PYEOF
 }
 
-# ── Helper: emit block JSON — interrupts execution, user must resubmit manually
+# emit_block FILE [PREFIX] — outputs {"decision": "block", "reason": ...}
+# Interrupts execution; user reads the file contents and resubmits manually.
 emit_block() {
-    export BLOCK_REASON="$1"
-    python3 -c "import json, os; print(json.dumps({'decision': 'block', 'reason': os.environ['BLOCK_REASON']}))"
+    local file="$1"
+    local prefix="${2:-}"
+    python3 - "$file" "$prefix" << 'PYEOF'
+import sys, json
+file_path = sys.argv[1]
+prefix    = sys.argv[2] if len(sys.argv) > 2 else ""
+with open(file_path) as f:
+    content = f.read().rstrip('\n')
+reason = f"{prefix}\n\n{content}" if prefix else content
+print(json.dumps({'decision': 'block', 'reason': reason}))
+PYEOF
 }
+
+# ── Write improved prompt to a file on disk ───────────────────────────────────
+IMPROVED_FILE=$(mktemp /tmp/token-optimizer-XXXXXX.md)
+printf '%s' "$IMPROVED" > "$IMPROVED_FILE"
 
 # ── Handle choice ─────────────────────────────────────────────────────────────
 case "$CHOICE" in
     a|"")
-        # Accept: replace prompt with improved version, Claude executes it directly
+        # Accept: write improved prompt to disk, Claude executes it directly via
+        # modifiedPrompt — no stdout string size constraints, no clipboard needed.
         printf '\033[32m[token-optimizer] Applying suggestion and continuing.\033[0m\n\n' >&2
-        emit_replace "$IMPROVED"
+        emit_replace "$IMPROVED_FILE"
+        rm -f "$IMPROVED_FILE"
         ;;
     e)
-        # Edit: open editor with suggestion, then interrupt so user can review before resubmit
-        TMPFILE=$(mktemp /tmp/token-optimizer-XXXXXX.txt)
-        printf '%s' "$IMPROVED" > "$TMPFILE"
-        "${EDITOR:-nano}" "$TMPFILE" </dev/tty >/dev/tty
-        EDITED=$(cat "$TMPFILE")
-        rm -f "$TMPFILE"
+        # Edit: open the improved prompt file in $EDITOR so the user can freely
+        # modify it (including across multiple files if needed). After saving,
+        # execution is interrupted — user resubmits the edited prompt manually.
+        "${EDITOR:-nano}" "$IMPROVED_FILE" </dev/tty >/dev/tty
         printf '\033[33m[token-optimizer] Execution interrupted — resubmit when ready.\033[0m\n\n' >&2
-        emit_block "Your edited prompt (copy and resubmit to proceed):"$'\n\n'"$EDITED"
+        emit_block "$IMPROVED_FILE" "Your edited prompt (resubmit to proceed):"
+        rm -f "$IMPROVED_FILE"
         ;;
     i)
         # Ignore: pass original through unchanged
+        rm -f "$IMPROVED_FILE"
         printf '\033[90m[token-optimizer] Proceeding with original prompt.\033[0m\n\n' >&2
         exit 0
         ;;
     c|*)
         # Cancel: discard the prompt
+        rm -f "$IMPROVED_FILE"
         printf '\033[31mPrompt cancelled.\033[0m\n\n' >&2
-        emit_block "Prompt cancelled."
+        python3 -c "import json; print(json.dumps({'decision': 'block', 'reason': 'Prompt cancelled.'}))"
         ;;
 esac
 
